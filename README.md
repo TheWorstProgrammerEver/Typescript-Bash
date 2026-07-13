@@ -42,4 +42,4 @@ Convenience parser that calls `JSON.parse` on stdout and returns type `T`.
 
 ## License
 
-MIT
+Don't care. Do whatever you want.
