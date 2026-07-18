@@ -1,0 +1,56 @@
+{
+  "name": "ts-bash",
+  "version": "1.0.0",
+  "description": "Type-safe bounded shell execution for short, captured-output commands",
+  "type": "module",
+  "license": "Unlicense",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TheWorstProgrammerEver/Typescript-Bash.git"
+  },
+  "bugs": {
+    "url": "https://github.com/TheWorstProgrammerEver/Typescript-Bash/issues"
+  },
+  "homepage": "https://github.com/TheWorstProgrammerEver/Typescript-Bash#readme",
+  "keywords": [
+    "bash",
+    "shell",
+    "typescript"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "os": [
+    "!win32"
+  ],
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "node scripts/clean.mjs && tsc -p tsconfig.build.json",
+    "prepack": "npm run build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test test/*.test.mjs",
+    "test:tarball": "npm run build && node scripts/smoke-tarball.mjs",
+    "validate": "npm run typecheck && npm test && npm run test:tarball"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.1",
+    "typescript": "6.0.3"
+  }
+}
