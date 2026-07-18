@@ -22,6 +22,7 @@ try {
   const manifest = JSON.parse(readFileSync(join(root, 'node_modules', 'ts-bash', 'package.json'), 'utf8'));
   assert.deepEqual(Object.keys(manifest.dependencies ?? {}), []);
   assert.deepEqual(manifest.engines, { node: '>=22.0.0' });
+  assert.deepEqual(manifest.os, ['!win32']);
 
   const result = execFileSync(process.execPath, [
     '--input-type=module',

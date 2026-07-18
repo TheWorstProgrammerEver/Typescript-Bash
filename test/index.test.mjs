@@ -167,6 +167,23 @@ test('rejects attempts to remove execution bounds', async () => {
   );
 });
 
+test('rejects execution on unsupported Windows hosts before spawning', () => {
+  const output = execFileSync(process.execPath, [
+    '--input-type=module',
+    '--eval',
+    [
+      "Object.defineProperty(process, 'platform', { value: 'win32' });",
+      "const { bash } = await import('./dist/index.js');",
+      "await bash('printf must-not-run').catch(error => process.stdout.write(error.message));",
+    ].join('\n'),
+  ], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+  });
+
+  assert.equal(output, 'ts-bash supports POSIX platforms only');
+});
+
 test('does not leave a child process after buffer termination', { skip: process.platform === 'win32' }, async () => {
   let pid;
   const source = [

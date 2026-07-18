@@ -11,6 +11,12 @@ export type BashParser<T> = (stdout: string) => T | Promise<T>;
 
 const trimTrailingLineEndings = (output: string): string => output.replace(/(?:\r?\n)+$/u, '');
 
+const assertSupportedPlatform = (): void => {
+  if (process.platform === 'win32') {
+    throw new Error('ts-bash supports POSIX platforms only');
+  }
+};
+
 const run = (command: string, options: ResolvedBashOptions): Promise<string> =>
   new Promise((resolve, reject) => {
     const stdoutChunks: Buffer[] = [];
@@ -20,7 +26,7 @@ const run = (command: string, options: ResolvedBashOptions): Promise<string> =>
     let failure: BashFailureReason | undefined;
     let termination: Promise<void> | undefined;
     const child = spawn(command, {
-      detached: process.platform !== 'win32',
+      detached: true,
       shell: true,
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
@@ -93,6 +99,8 @@ export async function bash<T>(
   parserOrOptions?: BashParser<T> | BashOptions,
   parserOptions?: BashOptions,
 ): Promise<string | T> {
+  assertSupportedPlatform();
+
   if (typeof command !== 'string' || command.trim().length === 0) {
     throw new TypeError('command must be a non-empty string');
   }

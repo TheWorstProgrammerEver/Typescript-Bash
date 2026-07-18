@@ -20,6 +20,9 @@
   "engines": {
     "node": ">=22.0.0"
   },
+  "os": [
+    "!win32"
+  ],
   "files": [
     "dist",
     "LICENSE",
