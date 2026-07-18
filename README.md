@@ -1,7 +1,7 @@
 # ts-bash
 
-Type-safe, zero-runtime-dependency shell execution for short commands whose
-output can be captured in memory.
+Type-safe, zero-runtime-dependency POSIX shell execution for short commands
+whose output can be captured in memory.
 
 ```ts
 import { bash, json } from 'ts-bash';
@@ -25,7 +25,8 @@ const lines = await bash('cat file.txt', output => output.split('\n'));
 npm install ts-bash
 ```
 
-Requires Node 22 or newer. The package is ESM-only.
+Requires Node 22 or newer on a POSIX platform. Windows is unsupported and is
+excluded by the package metadata. The package is ESM-only.
 
 ## API
 
@@ -50,12 +51,13 @@ interface BashOptions {
 ```
 
 Options can be passed as the second argument when no parser is needed, or as
-the third argument after a parser. Execution is always bounded. Defaults are a
-10-second timeout and a 1 MiB buffer per output stream; accepted overrides are
-at most 60 seconds and 16 MiB. On POSIX systems, timed-out commands run in an
-isolated process group: cleanup sends `SIGTERM`, escalates to `SIGKILL` after a
-short grace period, and completes before `bash()` rejects. `context` is an
-optional, non-secret operation label such as `read package manifest`.
+the third argument after a parser. Execution on supported POSIX platforms is
+always bounded. Defaults are a 10-second timeout and a 1 MiB buffer per output
+stream; accepted overrides are at most 60 seconds and 16 MiB. Timed-out
+commands run in an isolated process group: cleanup sends `SIGTERM`, escalates
+to `SIGKILL` after a short grace period, and completes before `bash()` rejects.
+`context` is an optional, non-secret operation label such as
+`read package manifest`.
 
 ### `json<T>()`
 
@@ -74,10 +76,11 @@ command needs credentials or other structured input.
 
 ## Scope
 
-`ts-bash` deliberately uses `exec` and captures the complete output. It is only
-for short, bounded commands expressed as a shell string. Use a spawn-based
-adapter instead for structured argument arrays, streaming output, inherited
-TTYs, cancellation, custom signal handling, or long-lived processes.
+`ts-bash` provides exec-style shell-string and captured-output semantics using
+`spawn(..., { shell: true })` so it can manage a dedicated POSIX process group.
+It is only for short, bounded commands expressed as a shell string. Use a
+spawn-based adapter instead for structured argument arrays, streaming output,
+inherited TTYs, cancellation, custom signal handling, or long-lived processes.
 
 ## License
 
