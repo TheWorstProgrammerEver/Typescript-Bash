@@ -12,6 +12,12 @@ import {
 
 const shellQuote = value => `'${value.replaceAll("'", "'\\''")}'`;
 const nodeCommand = source => `exec ${shellQuote(process.execPath)} -e ${shellQuote(source)}`;
+const resistantNodeChildCommand = source => [
+  "trap '' TERM",
+  `${shellQuote(process.execPath)} -e ${shellQuote(source)} & child=$!`,
+  "printf '%s\\n' \"$child\"",
+  'wait "$child"',
+].join('; ');
 
 const processExists = pid => {
   try {
@@ -97,6 +103,32 @@ test('enforces timeout bounds and waits for process termination', { skip: proces
     );
 
     await waitForExit(pid);
+  } finally {
+    if (pid !== undefined && processExists(pid)) process.kill(pid, 'SIGKILL');
+  }
+});
+
+test('escalates timeout cleanup for a SIGTERM-resistant shell child', { skip: process.platform === 'win32' }, async () => {
+  let pid;
+  const startedAt = Date.now();
+
+  try {
+    await assert.rejects(
+      bash(
+        resistantNodeChildCommand("process.on('SIGTERM', () => {}); setInterval(() => {}, 1_000)"),
+        { context: 'resistant child', timeoutMs: 50 },
+      ),
+      error => {
+        assert(error instanceof BashExecutionError);
+        assert.equal(error.reason, 'timeout');
+        pid = Number(error.stdout);
+        assert(Number.isSafeInteger(pid));
+        return true;
+      },
+    );
+
+    assert(Date.now() - startedAt < 400);
+    assert.equal(processExists(pid), false);
   } finally {
     if (pid !== undefined && processExists(pid)) process.kill(pid, 'SIGKILL');
   }

@@ -31,9 +31,10 @@ Requires Node 22 or newer. The package is ESM-only.
 
 ### `bash(command, parser?, options?)`
 
-Runs `command` through Node's `child_process.exec`. Without a parser it returns
-`Promise<string>`; callers that only need completion can ignore that value.
-With a parser it returns `Promise<T>`. Parsers may be synchronous or async.
+Runs `command` with Node's shell-string execution semantics and captures its
+output in memory. Without a parser it returns `Promise<string>`; callers that
+only need completion can ignore that value. With a parser it returns
+`Promise<T>`. Parsers may be synchronous or async.
 
 Captured stdout has only trailing `\n` and `\r\n` line endings removed. Other
 whitespace is preserved.
@@ -51,8 +52,10 @@ interface BashOptions {
 Options can be passed as the second argument when no parser is needed, or as
 the third argument after a parser. Execution is always bounded. Defaults are a
 10-second timeout and a 1 MiB buffer per output stream; accepted overrides are
-at most 60 seconds and 16 MiB. `context` is an optional, non-secret operation
-label such as `read package manifest`.
+at most 60 seconds and 16 MiB. On POSIX systems, timed-out commands run in an
+isolated process group: cleanup sends `SIGTERM`, escalates to `SIGKILL` after a
+short grace period, and completes before `bash()` rejects. `context` is an
+optional, non-secret operation label such as `read package manifest`.
 
 ### `json<T>()`
 

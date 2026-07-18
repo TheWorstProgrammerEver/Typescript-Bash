@@ -1,7 +1,8 @@
-import { exec, type ExecException } from 'node:child_process';
+import { spawn } from 'node:child_process';
 
 import { BashExecutionError, BashParserError, type BashFailureReason } from './errors.js';
 import { resolveBashOptions, type BashOptions, type ResolvedBashOptions } from './limits.js';
+import { hasRunningProcessGroup, terminateProcessGroup } from './process-lifecycle.js';
 
 export { BashExecutionError, BashParserError, type BashFailureReason } from './errors.js';
 export { bashLimits, type BashOptions } from './limits.js';
@@ -10,45 +11,76 @@ export type BashParser<T> = (stdout: string) => T | Promise<T>;
 
 const trimTrailingLineEndings = (output: string): string => output.replace(/(?:\r?\n)+$/u, '');
 
-const failureReason = (error: ExecException): BashFailureReason => {
-  if ((error as unknown as NodeJS.ErrnoException).code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
-    return 'max-buffer';
-  }
-  if (error.killed) return 'timeout';
-  if (error.signal !== null && error.signal !== undefined) return 'signal';
-  return 'exit';
-};
-
 const run = (command: string, options: ResolvedBashOptions): Promise<string> =>
   new Promise((resolve, reject) => {
-    exec(
-      command,
-      {
-        encoding: 'utf8',
-        killSignal: 'SIGTERM',
-        maxBuffer: options.maxBufferBytes,
-        timeout: options.timeoutMs,
-        windowsHide: true,
-      },
-      (error, stdout, stderr) => {
-        const trimmedStdout = trimTrailingLineEndings(stdout);
-        const trimmedStderr = trimTrailingLineEndings(stderr);
+    const stdoutChunks: Buffer[] = [];
+    const stderrChunks: Buffer[] = [];
+    let stdoutBytes = 0;
+    let stderrBytes = 0;
+    let failure: BashFailureReason | undefined;
+    let termination: Promise<void> | undefined;
+    const child = spawn(command, {
+      detached: process.platform !== 'win32',
+      shell: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
 
-        if (error === null) {
-          resolve(trimmedStdout);
+    const append = (chunks: Buffer[], bytes: number, chunk: Buffer): number => {
+      const remaining = options.maxBufferBytes - bytes;
+      if (remaining > 0) chunks.push(chunk.subarray(0, remaining));
+
+      const nextBytes = bytes + chunk.length;
+      if (nextBytes > options.maxBufferBytes && failure === undefined) {
+        failure = 'max-buffer';
+        clearTimeout(timeout);
+        termination = terminateProcessGroup(child);
+      }
+
+      return nextBytes;
+    };
+
+    child.stdout.on('data', (chunk: Buffer) => {
+      stdoutBytes = append(stdoutChunks, stdoutBytes, chunk);
+    });
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderrBytes = append(stderrChunks, stderrBytes, chunk);
+    });
+    child.once('error', () => {
+      failure ??= 'exit';
+    });
+
+    const timeout = setTimeout(() => {
+      if (failure !== undefined) return;
+      failure = 'timeout';
+      termination = terminateProcessGroup(child);
+    }, options.timeoutMs);
+
+    child.once('close', (exitCode, signal) => {
+      clearTimeout(timeout);
+
+      void (async () => {
+        if (termination !== undefined) await termination;
+        else if (hasRunningProcessGroup(child)) await terminateProcessGroup(child);
+
+        const stdout = trimTrailingLineEndings(Buffer.concat(stdoutChunks).toString('utf8'));
+        const stderr = trimTrailingLineEndings(Buffer.concat(stderrChunks).toString('utf8'));
+
+        if (failure === undefined && exitCode === 0 && signal === null) {
+          resolve(stdout);
           return;
         }
 
         reject(new BashExecutionError({
           ...(options.context === undefined ? {} : { context: options.context }),
-          exitCode: typeof error.code === 'number' ? error.code : null,
-          reason: failureReason(error),
-          signal: (error.signal as NodeJS.Signals | null | undefined) ?? null,
-          stderr: trimmedStderr,
-          stdout: trimmedStdout,
+          exitCode,
+          reason: failure ?? (signal === null ? 'exit' : 'signal'),
+          signal,
+          stderr,
+          stdout,
         }));
-      },
-    );
+      })().catch(reject);
+    });
   });
 
 const isParser = <T>(value: BashParser<T> | BashOptions | undefined): value is BashParser<T> =>
